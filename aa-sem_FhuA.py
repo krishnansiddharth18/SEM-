@@ -38,8 +38,8 @@ parser.add_argument('-pqr','--pqr_file',type=str,
                     help='PQR input file')
 parser.add_argument('-psf','--psf_file',type=str,
                     help='PSF input file')
-parser.add_argument('-dcd','--dcd_file',type=str,
-                    help='DCD input file')
+parser.add_argument('-dcd','--dcd_file',type=str, nargs='+',
+                    help='DCD input file(s)')
 parser.add_argument('--outname',type=str,
                     help='Output directory prefix')
 parser.add_argument('--length',type=float,default=45,
@@ -61,6 +61,10 @@ parser.add_argument('--stride',type=int,default=1,
 parser.add_argument('--voltage', type=float,
 		    default=100,
                     help='Applied bias (mV)')
+parser.add_argument('--pore-segid', type=str, default=None,
+                    help='Segid of pore atoms; if given, all frames are centered on the pore centroid')
+parser.add_argument('--write_pqr', action='store_true',
+                    help='Write PQR file with assigned radii for verification')
 
 args = parser.parse_args()
 
@@ -121,6 +125,16 @@ def _get_grids():
     bulk[(Z < 1.8) & (Z > -2.4) & (R2 > 4) ] = 0.00001
     return bulk, xyz
     
+class _PoreCenterTransformation:
+    """Module-level callable so multiprocessing can pickle it."""
+    def __init__(self, pore_ag):
+        self.pore_ag = pore_ag
+
+    def __call__(self, ts):
+        ts.positions -= self.pore_ag.center_of_geometry()
+        return ts
+
+
 class MySEM(AbstractSEM):
 
     def __init__(self,
@@ -642,6 +656,8 @@ if __name__ == '__main__':
     
     prefix = f'for_chris/{system_name}'
     # u = mda.Universe(f'{prefix}.pdb', f'{prefix}.1.dcd')
+    u = mda.Universe(args.psf_file, *args.dcd_file)
+
     if args.pqr_file:
         u_pqr = mda.Universe(args.pqr_file)
         u.add_TopologyAttr('radii', u_pqr.atoms.radii)
@@ -672,6 +688,14 @@ if __name__ == '__main__':
             if sel.n_atoms > 0:
                 sel.radii = radius
                 print(f"Assigned radius {radius} to {sel.n_atoms} atoms matching 'name {element.upper()}*'")
+
+    if args.pore_segid:
+        pore_ag = u.select_atoms(f"segid {args.pore_segid}")
+        if pore_ag.n_atoms == 0:
+            print(f"Warning: no atoms found with segid '{args.pore_segid}'. Skipping centering.")
+        else:
+            print(f"Centering trajectory on {pore_ag.n_atoms} atoms with segid '{args.pore_segid}'")
+            u.trajectory.add_transformations(_PoreCenterTransformation(pore_ag))
 
     if args.write_pqr:
         pqr_out = f"{system_name}.pqr"
