@@ -100,7 +100,9 @@ class ConductivityMap():
 #        self.bulk_conductivity = 20.0840 # S/m
 #        self.bulk_conductivity =16.5# S/m 1M KCL, MD simulation
 #        self.bulk_conductivity =10.5# S/m 1M KCL, Experimental 
-        self.bulk_conductivity = 38.7 # S/m 1M pottasium gluconate
+        #self.bulk_conductivity = 38.7 # S/m 1M pottasium gluconate
+        self.bulk_conductivity = 8.25 # S/m 1M pottasium gluconate
+
         minr = 0.13
         self.cutoff = maxr = 0.41
         self.slope = 1.0/(maxr-minr)
@@ -410,7 +412,7 @@ class MySEM(AbstractSEM):
 
             stride = cls.stride
             sel = u.select_atoms(sem_sel)
-            particle_coords = np.vstack([0.1*sel.positions for ts in u.trajectory[::stride*10]])
+            particle_coords = np.vstack([0.1*sel.positions for ts in u.trajectory[::stride]])
 
             cls.info(f"generate_mesh: Building KDTree of {len(particle_coords)} near-particle points")
             part_tree = KDTree( particle_coords )
@@ -586,7 +588,7 @@ class MySEM(AbstractSEM):
             key = ''
 
             stride = self.stride
-            complete_last_step = len(u.trajectory[::stride])-1
+            complete_last_step = len(u.trajectory)-1
 
             dirname = f'{self.prefix}_{self.voltage}mV'
             if not os.path.exists(dirname):
@@ -718,7 +720,8 @@ if __name__ == '__main__':
                          base_conductance_shm = base_conductance_shm,
                          base_conductance_edges = base_conductance_edges,
                          universe = u)
-    )
+        )
+    
     
     for frame in (0,):        
         log_memory(f"Processing test frame {frame}")

@@ -642,10 +642,44 @@ if __name__ == '__main__':
     
     prefix = f'for_chris/{system_name}'
     # u = mda.Universe(f'{prefix}.pdb', f'{prefix}.1.dcd')
-    u_pqr = mda.Universe(args.pqr_file)
-    u = mda.Universe(args.psf_file, args.dcd_file)
-    u.add_TopologyAttr('radii',u_pqr.atoms.radii)
+    if args.pqr_file:
+        u_pqr = mda.Universe(args.pqr_file)
+        u.add_TopologyAttr('radii', u_pqr.atoms.radii)
+    else:
+        print("No PQR file provided. Loading radii from radii.csv...")
+        radii_map = {}
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            radii_csv_path = os.path.join(script_dir, 'radii.csv')
+            with open(radii_csv_path, 'r') as f:
+                for line in f:
+                    if line.strip() and not line.startswith('Atom_type'):
+                        parts = line.split(',')
+                        if len(parts) >= 2:
+                            radii_map[parts[0].strip()] = float(parts[1])
+        except FileNotFoundError:
+            print(f"Error: radii.csv not found at {radii_csv_path}!")
+            sys.exit(1)
 
+        # Initialize radii with default value of 1.5
+        u.add_TopologyAttr('radii')
+        u.atoms.radii = 1.5
+        
+        # Assign radii based on first letter of atom name (matches original logic)
+        for element, radius in radii_map.items():
+            # select_atoms("name X*") matches strict element logic or name[0] logic for standard names
+            sel = u.select_atoms(f"name {element.upper()}*")
+            if sel.n_atoms > 0:
+                sel.radii = radius
+                print(f"Assigned radius {radius} to {sel.n_atoms} atoms matching 'name {element.upper()}*'")
+
+    if args.write_pqr:
+        pqr_out = f"{system_name}.pqr"
+        print(f"Writing PQR file with assigned radii to {pqr_out}...")
+        u.atoms.write(pqr_out)
+        print("PQR write complete. Exiting.")
+        sys.exit(0)    
+        
     sem = MySEM(domain=domain,
                 voltage=args.voltage,
                 conductivity_model = ConductivityMap(),
@@ -655,7 +689,7 @@ if __name__ == '__main__':
                 far_from_pore = 20,
                 stride = args.stride,
                 prefix = system_name, # for output
-                universe = u,
+                universe = u
                 )
 
     from matplotlib import pyplot as plt

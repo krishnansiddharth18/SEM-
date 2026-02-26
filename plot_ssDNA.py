@@ -10,6 +10,32 @@ def tanh_func(x, a, b, c, d):
     """
     return a * np.tanh(b * (x - c)) + d
 
+class ChargedConductivityMap:
+    def __init__(self, a=0.1, b=0.5, c=0.01):
+        self.bulk_conductivity = 8.25  # S/m, 1M potassium gluconate
+        self.a = a
+        self.b = b
+        self.c = c
+        minr = 0.13
+        self.cutoff = maxr = 0.41
+        self.slope = 1.0 / (maxr - minr)
+        self.intercept = -minr * self.slope
+
+    def __call__(self, dists, charges=None):
+        sigma_0 = self.slope * dists + self.intercept
+        sigma_0[sigma_0 < 0] = 0.0000001
+        sigma_0[sigma_0 > 1] = 1.0
+        sigma_0 = sigma_0 * self.bulk_conductivity
+
+        if charges is None:
+            return sigma_0
+
+        result = sigma_0 * (1 + self.a * charges) * np.exp(-self.b * dists) + self.c * charges
+        result[result < 0] = 0.0000001
+        return result
+
+   
+ 
 class ConductivityMapFitted:
     """
     Creates a conductivity map model by FITTING data from a CSV file
